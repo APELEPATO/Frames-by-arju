@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frames by Arju</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1); }
+            100% { opacity: 1; }
+        }
+        .animate-welcome { animation: fadeInOut 2s ease-in-out forwards; }
+        .hidden-section { display: none; }
+    </style>
+</head>
+<body class="bg-black text-white font-sans">
+
+    <div id="welcome-screen" class="fixed inset-0 flex items-center justify-center bg-black z-50">
+        <h1 class="text-4xl md:text-6xl font-bold animate-welcome tracking-widest text-orange-500">
+            FRAMES BY ARJU
+        </h1>
+    </div>
+
+    <div id="main-content" class="hidden-section p-5">
+        <header class="flex flex-col items-center mb-10">
+            <h2 class="text-2xl font-bold mb-4">Upload Your Memories</h2>
+            
+            <div class="flex gap-4">
+                <input type="file" id="file-input" multiple accept="image/*" class="hidden">
+                <button onclick="document.getElementById('file-input').click()" class="bg-blue-600 px-6 py-2 rounded-full font-semibold">Select Photos</button>
+                <button id="generate-qr-btn" onclick="generateQR()" class="bg-green-600 px-6 py-2 rounded-full font-semibold hidden">Generate QR Code</button>
+            </div>
+        </header>
+
+        <div id="qr-modal" class="hidden-section flex flex-col items-center bg-white p-5 rounded-lg text-black mb-10 mx-auto max-w-xs">
+            <div id="qrcode"></div>
+            <p class="mt-2 font-bold text-sm">Scan to View & Download</p>
+            <button onclick="closeQR()" class="mt-3 text-red-500 text-xs underline">Close</button>
+        </div>
+
+        <div id="gallery" class="grid grid-cols-3 md:grid-cols-5 gap-2">
+            </div>
+
+        <div id="download-section" class="fixed bottom-5 right-5 hidden">
+            <button onclick="downloadAll()" class="bg-orange-500 p-4 rounded-full shadow-lg font-bold">Download All</button>
+        </div>
+    </div>
+
+    <script>
+        // 1. Welcome Animation Timeout
+        setTimeout(() => {
+            document.getElementById('welcome-screen').style.display = 'none';
+            document.getElementById('main-content').classList.remove('hidden-section');
+        }, 3000);
+
+        let uploadedImages = [];
+
+        // 2. Handle File Selection & Preview
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const files = e.target.files;
+            const gallery = document.getElementById('gallery');
+            
+            if (files.length > 0) {
+                document.getElementById('generate-qr-btn').classList.remove('hidden');
+                document.getElementById('download-section').classList.remove('hidden');
+            }
+
+            for (let i = 0; i < files.length; i++) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    uploadedImages.push(event.target.result);
+                    
+                    const div = document.createElement('div');
+                    div.className = "relative group aspect-square overflow-hidden rounded-md";
+                    div.innerHTML = `
+                        <img src="${event.target.result}" class="object-cover w-full h-full border border-gray-800">
+                        <button onclick="this.parentElement.remove()" class="absolute top-1 right-1 bg-red-600 text-white text-[10px] px-1 rounded">Delete</button>
+                    `;
+                    gallery.appendChild(div);
+                };
+                reader.readAsDataURL(files[i]);
+            }
+        });
+
+        // 3. Generate QR Code
+        function generateQR() {
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = ""; // Clear old QR
+            const currentUrl = window.location.href; // ഈ വെബ്സൈറ്റ് ലിങ്ക് തന്നെ QR ആക്കും
+            
+            new QRCode(qrContainer, {
+                text: currentUrl,
+                width: 200,
+                height: 200
+            });
+            document.getElementById('qr-modal').classList.remove('hidden-section');
+            window.scrollTo(0, 0);
+        }
+
+        function closeQR() {
+            document.getElementById('qr-modal').classList.add('hidden-section');
+        }
+
+        // 4. Download All as ZIP
+        async function downloadAll() {
+            const zip = new JSZip();
+            const imgFolder = zip.folder("frames_by_arju");
+
+            alert("Preparing your 1000+ photos for download. Please wait...");
+
+            uploadedImages.forEach((dataUrl, index) => {
+                const base64Data = dataUrl.split(',')[1];
+                imgFolder.file(`photo_${index + 1}.jpg`, base64Data, {base64: true});
+            });
+
+            const content = await zip.generateAsync({type: "blob"});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = "frames_by_arju_photos.zip";
+            link.click();
+        }
+    </script>
+</body>
+</html>
