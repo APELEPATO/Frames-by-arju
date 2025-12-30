@@ -8,119 +8,122 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        @keyframes fadeInOut {
-            0% { opacity: 0; transform: scale(0.9); }
-            50% { opacity: 1; transform: scale(1); }
-            100% { opacity: 1; }
-        }
-        .animate-welcome { animation: fadeInOut 2s ease-in-out forwards; }
-        .hidden-section { display: none; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade { animation: fadeIn 2s ease-in-out; }
+        .hidden { display: none; }
     </style>
 </head>
-<body class="bg-black text-white font-sans">
+<body class="bg-black text-white">
 
-    <div id="welcome-screen" class="fixed inset-0 flex items-center justify-center bg-black z-50">
-        <h1 class="text-4xl md:text-6xl font-bold animate-welcome tracking-widest text-orange-500">
-            FRAMES BY ARJU
-        </h1>
+    <div id="loader" class="fixed inset-0 flex items-center justify-center bg-black z-50">
+        <h1 class="text-3xl md:text-5xl font-bold animate-fade text-orange-500 tracking-tighter">FRAMES BY ARJU</h1>
     </div>
 
-    <div id="main-content" class="hidden-section p-5">
-        <header class="flex flex-col items-center mb-10">
-            <h2 class="text-2xl font-bold mb-4">Upload Your Memories</h2>
+    <div id="app" class="hidden p-4">
+        <header class="text-center mb-8">
+            <h2 class="text-xl font-light tracking-widest uppercase">Gallery</h2>
             
-            <div class="flex gap-4">
+            <div id="admin-panel" class="hidden mt-5 p-4 border border-dashed border-gray-600 rounded">
+                <p class="text-xs text-gray-400 mb-2 font-bold">ADMIN PANEL</p>
                 <input type="file" id="file-input" multiple accept="image/*" class="hidden">
-                <button onclick="document.getElementById('file-input').click()" class="bg-blue-600 px-6 py-2 rounded-full font-semibold">Select Photos</button>
-                <button id="generate-qr-btn" onclick="generateQR()" class="bg-green-600 px-6 py-2 rounded-full font-semibold hidden">Generate QR Code</button>
+                <button onclick="document.getElementById('file-input').click()" class="bg-white text-black px-4 py-2 rounded text-sm font-bold">ADD PHOTOS</button>
+                <button id="qr-gen-btn" onclick="toggleQR()" class="bg-orange-600 px-4 py-2 rounded text-sm font-bold ml-2 hidden">GENERATE QR</button>
             </div>
         </header>
 
-        <div id="qr-modal" class="hidden-section flex flex-col items-center bg-white p-5 rounded-lg text-black mb-10 mx-auto max-w-xs">
-            <div id="qrcode"></div>
-            <p class="mt-2 font-bold text-sm">Scan to View & Download</p>
-            <button onclick="closeQR()" class="mt-3 text-red-500 text-xs underline">Close</button>
+        <div id="qr-box" class="hidden bg-white p-4 rounded-lg mx-auto max-w-[250px] text-center mb-8">
+            <div id="qrcode" class="flex justify-center"></div>
+            <p class="text-black text-xs mt-2 font-bold uppercase">Scan to share this gallery</p>
         </div>
 
-        <div id="gallery" class="grid grid-cols-3 md:grid-cols-5 gap-2">
-            </div>
-
-        <div id="download-section" class="fixed bottom-5 right-5 hidden">
-            <button onclick="downloadAll()" class="bg-orange-500 p-4 rounded-full shadow-lg font-bold">Download All</button>
+        <div id="user-controls" class="flex justify-between items-center mb-4">
+            <span id="photo-count" class="text-xs text-gray-400">0 Photos</span>
+            <button onclick="downloadAllZip()" class="bg-green-600 text-[10px] px-3 py-1 rounded-full uppercase font-bold">Download All (ZIP)</button>
         </div>
+
+        <div id="gallery" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"></div>
     </div>
 
     <script>
-        // 1. Welcome Animation Timeout
+        let photos = [];
+        const urlParams = new URLSearchParams(window.location.search);
+        const isAdmin = urlParams.get('admin') === 'true';
+
+        // Welcome Screen logic
         setTimeout(() => {
-            document.getElementById('welcome-screen').style.display = 'none';
-            document.getElementById('main-content').classList.remove('hidden-section');
-        }, 3000);
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('app').classList.remove('hidden');
+            if(isAdmin) document.getElementById('admin-panel').classList.remove('hidden');
+        }, 2500);
 
-        let uploadedImages = [];
-
-        // 2. Handle File Selection & Preview
+        // File Selection
         document.getElementById('file-input').addEventListener('change', function(e) {
             const files = e.target.files;
-            const gallery = document.getElementById('gallery');
-            
-            if (files.length > 0) {
-                document.getElementById('generate-qr-btn').classList.remove('hidden');
-                document.getElementById('download-section').classList.remove('hidden');
-            }
+            if(files.length > 0) document.getElementById('qr-gen-btn').classList.remove('hidden');
 
-            for (let i = 0; i < files.length; i++) {
+            for (let file of files) {
                 const reader = new FileReader();
                 reader.onload = function(event) {
-                    uploadedImages.push(event.target.result);
-                    
-                    const div = document.createElement('div');
-                    div.className = "relative group aspect-square overflow-hidden rounded-md";
-                    div.innerHTML = `
-                        <img src="${event.target.result}" class="object-cover w-full h-full border border-gray-800">
-                        <button onclick="this.parentElement.remove()" class="absolute top-1 right-1 bg-red-600 text-white text-[10px] px-1 rounded">Delete</button>
-                    `;
-                    gallery.appendChild(div);
+                    const photoData = event.target.result;
+                    photos.push(photoData);
+                    renderGallery();
                 };
-                reader.readAsDataURL(files[i]);
+                reader.readAsDataURL(file);
             }
         });
 
-        // 3. Generate QR Code
-        function generateQR() {
-            const qrContainer = document.getElementById('qrcode');
-            qrContainer.innerHTML = ""; // Clear old QR
-            const currentUrl = window.location.href; // ഈ വെബ്സൈറ്റ് ലിങ്ക് തന്നെ QR ആക്കും
-            
-            new QRCode(qrContainer, {
-                text: currentUrl,
-                width: 200,
-                height: 200
+        function renderGallery() {
+            const gallery = document.getElementById('gallery');
+            const count = document.getElementById('photo-count');
+            gallery.innerHTML = "";
+            count.innerText = `${photos.length} Photos`;
+
+            photos.forEach((src, index) => {
+                const div = document.createElement('div');
+                div.className = "relative group aspect-square rounded-lg overflow-hidden bg-gray-900";
+                div.innerHTML = `
+                    <img src="${src}" class="w-full h-full object-cover cursor-pointer" onclick="previewImage('${src}')">
+                    <div class="absolute bottom-1 right-1 flex gap-1">
+                        <a href="${src}" download="photo_${index}.jpg" class="bg-black/50 p-1 rounded text-[10px]">Save</a>
+                        ${isAdmin ? `<button onclick="deletePhoto(${index})" class="bg-red-600/80 p-1 rounded text-[10px]">X</button>` : ''}
+                    </div>
+                `;
+                gallery.appendChild(div);
             });
-            document.getElementById('qr-modal').classList.remove('hidden-section');
-            window.scrollTo(0, 0);
         }
 
-        function closeQR() {
-            document.getElementById('qr-modal').classList.add('hidden-section');
+        function deletePhoto(index) {
+            photos.splice(index, 1);
+            renderGallery();
         }
 
-        // 4. Download All as ZIP
-        async function downloadAll() {
+        function previewImage(src) {
+            const win = window.open();
+            win.document.write(`<body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;"><img src="${src}" style="max-width:100%;max-height:100%;"></body>`);
+        }
+
+        function toggleQR() {
+            const qrBox = document.getElementById('qr-box');
+            qrBox.classList.toggle('hidden');
+            if(!qrBox.classList.contains('hidden')) {
+                document.getElementById('qrcode').innerHTML = "";
+                // QR ലിങ്കിൽ നിന്നും admin=true ഒഴിവാക്കി വേണം മറ്റുള്ളവർക്ക് നൽകാൻ
+                const shareUrl = window.location.origin + window.location.pathname;
+                new QRCode(document.getElementById('qrcode'), { text: shareUrl, width: 180, height: 180 });
+            }
+        }
+
+        async function downloadAllZip() {
+            if(photos.length === 0) return alert("No photos to download");
             const zip = new JSZip();
-            const imgFolder = zip.folder("frames_by_arju");
-
-            alert("Preparing your 1000+ photos for download. Please wait...");
-
-            uploadedImages.forEach((dataUrl, index) => {
-                const base64Data = dataUrl.split(',')[1];
-                imgFolder.file(`photo_${index + 1}.jpg`, base64Data, {base64: true});
+            photos.forEach((data, i) => {
+                const imgData = data.split(',')[1];
+                zip.file(`photo_${i+1}.jpg`, imgData, {base64: true});
             });
-
-            const content = await zip.generateAsync({type: "blob"});
+            const content = await zip.generateAsync({type:"blob"});
             const link = document.createElement('a');
             link.href = URL.createObjectURL(content);
-            link.download = "frames_by_arju_photos.zip";
+            link.download = "frames_by_arju.zip";
             link.click();
         }
     </script>
